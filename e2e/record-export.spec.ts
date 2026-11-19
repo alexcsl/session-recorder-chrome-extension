@@ -135,6 +135,16 @@ test('records interactions and exports a readable, valid zip', async ({
 
   // Pick the Full (L0) level so bodies/labels are present, then download.
   await sp.getByRole('button', { name: 'Full', exact: true }).click();
+  const timelineFilter = sp.getByLabel('Timeline');
+  await expect(timelineFilter).toHaveValue('all');
+  await expect(sp.locator('.r-tl .r-row').first()).toBeVisible();
+  await timelineFilter.selectOption('failures');
+  await expect(sp.locator('.r-tl .r-row:not(.r-err)')).toHaveCount(0);
+  await timelineFilter.selectOption('annotations');
+  await expect(sp.getByText('No events match this filter at this detail level.')).toBeVisible();
+  await timelineFilter.selectOption('all');
+  await expect(sp.locator('.r-tl .r-row').first()).toBeVisible();
+  await timelineFilter.selectOption('annotations');
   await sp.getByRole('button', { name: /Download .zip/i }).click();
   await sp.waitForFunction(() => (window as any).__dl !== null, undefined, {
     timeout: 20_000,

@@ -19,8 +19,19 @@
       </button>
       <button type="button" class="btn" id="share">Share & create issue</button>
     </header>
-    <main class="doc" id="report">
-      <p class="loading">Loading report…</p>
+    <main class="doc">
+      <div class="r-filter" id="timeline-controls" hidden>
+        <label for="timeline-filter">Timeline</label>
+        <select id="timeline-filter">
+          <option value="all">All events</option>
+          <option value="failures">Failures</option>
+          <option value="annotations">Annotations</option>
+        </select>
+        <span id="timeline-count" role="status"></span>
+      </div>
+      <div id="report">
+        <p class="loading">Loading report…</p>
+      </div>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>
