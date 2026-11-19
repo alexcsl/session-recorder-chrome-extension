@@ -42,6 +42,10 @@ const titleEl = document.getElementById('bar-title') as HTMLElement;
 const metaEl = document.getElementById('bar-meta') as HTMLElement;
 const levelsEl = document.getElementById('bar-levels') as HTMLElement;
 const downloadBtn = document.getElementById('download') as HTMLButtonElement;
+const timelineControls = document.getElementById('timeline-controls') as HTMLElement;
+const timelineFilter = document.getElementById('timeline-filter') as HTMLSelectElement;
+const timelineCount = document.getElementById('timeline-count') as HTMLElement;
+timelineFilter.addEventListener('change', render);
 
 // Start at Standard — the same default as the side panel's export chooser, so
 // the two surfaces agree the moment a session stops. Selections sync both ways
@@ -126,6 +130,7 @@ async function load(): Promise<void> {
   }
   const assetsMeta: AssetMeta[] = assets.map(({ blob: _b, ...m }) => m);
   loaded = { session, events, assetsMeta, mediaUrls };
+  timelineControls.hidden = false;
   renderLevels();
   render();
 }
@@ -159,6 +164,16 @@ function render(): void {
   };
   // Dictated speech already appears as the annotation it produced.
   const trimmed = trimForLevel(events, level, ctx).filter((e) => !isDictatedSpeech(e));
+  const filter = timelineFilter.value;
+  const entries = filter === 'all' ? trimmed : trimmed.filter((e) => (
+    filter === 'annotations' ? e.type === 'annotation' :
+    e.type === 'error' ||
+    (e.type === 'console' && e.payload.level === 'error') ||
+    (e.type === 'net-request' && isFailedRequest(e.payload))
+  ));
+  timelineCount.textContent = filter === 'all'
+    ? `${entries.length} events`
+    : `${entries.length} of ${trimmed.length} events`;
 
   const root = el('div');
 
@@ -188,13 +203,13 @@ function render(): void {
   // Timeline (group consecutive net-requests into <details>)
   const tl = el('div', 'r-tl');
   let i = 0;
-  while (i < trimmed.length) {
-    const e = trimmed[i]!;
+  while (i < entries.length) {
+    const e = entries[i]!;
     if (e.type === 'net-request') {
       let j = i;
       const run: SessionEvent[] = [];
-      while (j < trimmed.length && trimmed[j]!.type === 'net-request') {
-        run.push(trimmed[j]!);
+      while (j < entries.length && entries[j]!.type === 'net-request') {
+        run.push(entries[j]!);
         j += 1;
       }
       if (run.length >= 3) {
@@ -207,8 +222,8 @@ function render(): void {
       // Stitch a run of consecutive voice segments into one paragraph.
       let j = i;
       const run: Extract<SessionEvent, { type: 'voice-segment' }>[] = [];
-      while (j < trimmed.length && trimmed[j]!.type === 'voice-segment') {
-        run.push(trimmed[j]! as Extract<SessionEvent, { type: 'voice-segment' }>);
+      while (j < entries.length && entries[j]!.type === 'voice-segment') {
+        run.push(entries[j]! as Extract<SessionEvent, { type: 'voice-segment' }>);
         j += 1;
       }
       tl.appendChild(run.length >= 2 ? voiceGroup(run) : eventNode(e, mediaUrls));
@@ -217,6 +232,9 @@ function render(): void {
       tl.appendChild(eventNode(e, mediaUrls));
       i += 1;
     }
+  }
+  if (filter !== 'all' && entries.length === 0) {
+    tl.appendChild(el('p', 'loading', 'No events match this filter at this detail level.'));
   }
   root.appendChild(tl);
 
@@ -340,8 +358,12 @@ function eventNode(e: SessionEvent, mediaUrls: Map<string, string>): HTMLElement
   }
 }
 
+function isFailedRequest(p: NetRequestPayload): boolean {
+  return p.failed === true || (typeof p.status === 'number' && p.status >= 400);
+}
+
 function netRow(p: NetRequestPayload, e: SessionEvent): HTMLElement {
-  const bad = p.failed || (typeof p.status === 'number' && p.status >= 400);
+  const bad = isFailedRequest(p);
   const row = el('div', 'r-net' + (bad ? ' r-err' : ''));
   const line = el('div', 'r-netline');
   line.append(clockOf(e), tag('net'));
@@ -363,7 +385,7 @@ function netRow(p: NetRequestPayload, e: SessionEvent): HTMLElement {
 
 function netGroup(run: SessionEvent[]): HTMLElement {
   const errors = run.filter(
-    (e) => e.type === 'net-request' && (e.payload.failed || (typeof e.payload.status === 'number' && e.payload.status >= 400)),
+    (e) => e.type === 'net-request' && isFailedRequest(e.payload),
   ).length;
   const wrap = el('div', 'r-netgroup');
   const details = el('details');
